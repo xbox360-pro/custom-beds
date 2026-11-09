@@ -4,7 +4,9 @@ import dev.xbox360pro.custombeds.CustomBeds;
 import dev.xbox360pro.custombeds.ModRegistry;
 import dev.xbox360pro.custombeds.data.BedDesign;
 import dev.xbox360pro.custombeds.data.BedDesignStorage;
+import dev.xbox360pro.custombeds.entity.CustomPaintingEntity;
 import dev.xbox360pro.custombeds.item.CustomBedItem;
+import dev.xbox360pro.custombeds.item.CustomPaintingItem;
 import dev.xbox360pro.custombeds.item.WrappedGiftItem;
 import dev.xbox360pro.custombeds.network.Network;
 import dev.xbox360pro.custombeds.network.Packets;
@@ -35,17 +37,21 @@ public final class ServerHandler {
 
     public static final int TEX_W = 64;
     public static final int TEX_H = 128;
-    private static final int MAX_CHUNKS = 12;              // ~360 KB, way more than a 64x128 PNG needs
+    private static final int MAX_CHUNKS = 16;              // ~480 KB, plenty for a 256x256 painting PNG
     private static final int MAX_DESIGNS_PER_PLAYER = 500;
 
     private static final class Pending {
         final String name;
+        final int kind, w, h;
         final int total;
         int next;
         final ByteArrayOutputStream data = new ByteArrayOutputStream();
 
-        Pending(String name, int total) {
+        Pending(String name, int kind, int w, int h, int total) {
             this.name = name;
+            this.kind = kind;
+            this.w = w;
+            this.h = h;
             this.total = total;
         }
     }
@@ -66,7 +72,7 @@ public final class ServerHandler {
             fail(player, Component.translatable("message.custombeds.upload_too_big"));
             return;
         }
-        if (msg.index() == 0) PENDING.put(key, new Pending(msg.name(), msg.total()));
+        if (msg.index() == 0) PENDING.put(key, new Pending(msg.name(), msg.kind(), msg.w(), msg.h(), msg.total()));
         Pending p = PENDING.get(key);
         if (p == null || msg.index() != p.next || msg.total() != p.total) {
             PENDING.remove(key);
@@ -77,12 +83,20 @@ public final class ServerHandler {
         p.next++;
         if (p.next == p.total) {
             PENDING.remove(key);
-            finishUpload(player, p.name, p.data.toByteArray());
+            finishUpload(player, p, p.data.toByteArray());
         }
     }
 
-    private static void finishUpload(ServerPlayer player, String rawName, byte[] png) {
-        if (!isValidTexture(png)) {
+    private static void finishUpload(ServerPlayer player, Pending p, byte[] png) {
+        boolean painting = p.kind == BedDesign.KIND_PAINTING;
+        int w = painting ? p.w : 0, h = painting ? p.h : 0;
+        if (painting && (w < 1 || h < 1 || w > CustomPaintingEntity.MAX_SIZE || h > CustomPaintingEntity.MAX_SIZE)) {
+            fail(player, Component.translatable("message.custombeds.upload_bad_image"));
+            return;
+        }
+        int texW = painting ? w * PAINTING_PX : TEX_W;
+        int texH = painting ? h * PAINTING_PX : TEX_H;
+        if (!isValidTexture(png, texW, texH)) {
             fail(player, Component.translatable("message.custombeds.upload_bad_image"));
             return;
         }
@@ -92,24 +106,36 @@ public final class ServerHandler {
             return;
         }
 
-        String name = cleanName(rawName);
+        String name = cleanName(p.name);
         BedDesign design = new BedDesign(UUID.randomUUID(), name, player.getUUID(),
-                player.getGameProfile().getName(), System.currentTimeMillis(), png);
+                player.getGameProfile().getName(), System.currentTimeMillis(), png,
+                painting ? BedDesign.KIND_PAINTING : BedDesign.KIND_BED, w, h);
         storage.add(design);
 
-        give(player, CustomBedItem.create(design.ref()));
+        give(player, itemFor(design));
         Network.sendTo(player, new Packets.BedImage(design.id(), design.name(), design.ownerName(), design.png()));
         Network.sendTo(player, new Packets.UploadResult(true,
-                Component.translatable("message.custombeds.upload_ok", name)));
+                Component.translatable(painting ? "message.custombeds.upload_ok_painting" : "message.custombeds.upload_ok", name)));
         player.level().playSound(null, player.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5f, 1.6f);
-        CustomBeds.LOGGER.info("{} created custom bed '{}' ({})", player.getGameProfile().getName(), name, design.id());
+        CustomBeds.LOGGER.info("{} created custom {} '{}' ({})", player.getGameProfile().getName(),
+                painting ? "painting" : "bed", name, design.id());
     }
 
-    private static boolean isValidTexture(byte[] png) {
+    public static final int PAINTING_PX = 64;
+
+    private static ItemStack itemFor(BedDesign d) {
+        return d.isPainting() ? CustomPaintingItem.create(d.ref(), d.width(), d.height()) : CustomBedItem.create(d.ref());
+    }
+
+    public static boolean isGiftable(ItemStack stack) {
+        return stack.getItem() instanceof CustomBedItem || stack.getItem() instanceof CustomPaintingItem;
+    }
+
+    private static boolean isValidTexture(byte[] png, int texW, int texH) {
         if (png.length < 8 || (png[0] & 0xFF) != 0x89 || png[1] != 'P' || png[2] != 'N' || png[3] != 'G') return false;
         try {
             BufferedImage img = ImageIO.read(new ByteArrayInputStream(png));
-            return img != null && img.getWidth() == TEX_W && img.getHeight() == TEX_H;
+            return img != null && img.getWidth() == texW && img.getHeight() == texH;
         } catch (Exception e) {
             return false;
         }
@@ -141,7 +167,7 @@ public final class ServerHandler {
     public static void onRequestList(ServerPlayer player) {
         List<Packets.DesignEntry> entries = new ArrayList<>();
         for (BedDesign d : BedDesignStorage.get(player.server).newestFirst()) {
-            entries.add(new Packets.DesignEntry(d.id(), d.name(), d.ownerName(), d.ownerId()));
+            entries.add(new Packets.DesignEntry(d.id(), d.name(), d.ownerName(), d.ownerId(), d.kind(), d.width(), d.height()));
         }
         Network.sendTo(player, new Packets.DesignList(entries, canCopyAll(player)));
     }
@@ -154,8 +180,8 @@ public final class ServerHandler {
                     .withStyle(ChatFormatting.RED), true);
             return;
         }
-        give(player, CustomBedItem.create(d.ref()));
-        player.displayClientMessage(Component.translatable("message.custombeds.got_copy", d.name())
+        give(player, itemFor(d));
+        player.displayClientMessage(Component.translatable(d.isPainting() ? "message.custombeds.got_copy_painting" : "message.custombeds.got_copy", d.name())
                 .withStyle(ChatFormatting.GREEN), true);
         player.level().playSound(null, player.blockPosition(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 0.6f, 1.2f);
     }
@@ -170,7 +196,7 @@ public final class ServerHandler {
         Inventory inv = player.getInventory();
         if (msg.slot() < 0 || msg.slot() >= inv.getContainerSize()) return;
         ItemStack bed = inv.getItem(msg.slot());
-        if (!(bed.getItem() instanceof CustomBedItem)) {
+        if (!isGiftable(bed)) {
             player.displayClientMessage(Component.translatable("message.custombeds.wrap_no_bed").withStyle(ChatFormatting.RED), true);
             return;
         }

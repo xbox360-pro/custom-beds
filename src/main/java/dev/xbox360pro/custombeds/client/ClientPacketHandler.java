@@ -25,12 +25,12 @@ public final class ClientPacketHandler {
     }
 
     /** Sends a finished 64x128 PNG to the server in chunks. */
-    public static void upload(String name, byte[] png) {
+    public static void upload(String name, int kind, int w, int h, byte[] png) {
         int total = Math.max(1, (png.length + Packets.CHUNK_SIZE - 1) / Packets.CHUNK_SIZE);
         for (int i = 0; i < total; i++) {
             int from = i * Packets.CHUNK_SIZE;
             int to = Math.min(png.length, from + Packets.CHUNK_SIZE);
-            Network.sendToServer(new Packets.UploadChunk(name, i, total, Arrays.copyOfRange(png, from, to)));
+            Network.sendToServer(new Packets.UploadChunk(name, kind, w, h, i, total, Arrays.copyOfRange(png, from, to)));
         }
     }
 }

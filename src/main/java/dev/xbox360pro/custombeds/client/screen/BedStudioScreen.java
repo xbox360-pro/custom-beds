@@ -51,6 +51,15 @@ public class BedStudioScreen extends Screen {
     private Button createButton;
     private Button copyButton;
     private Button giftButton;
+    private Button modeButton;
+    private Button widthButton;
+    private Button heightButton;
+
+    // what we're making: remembered between openings
+    private static boolean paintingMode;
+    private static int paintW = 2;
+    private static int paintH = 2;
+    private BufferedImage sourceImage; // shrunk copy of the picked picture, so size changes are instant
 
     private byte[] pendingPng;
     private DynamicTexture previewTexture;
@@ -85,6 +94,13 @@ public class BedStudioScreen extends Screen {
         String oldName = nameBox != null ? nameBox.getValue() : "";
         String oldPath = pathBox != null ? pathBox.getValue() : "";
 
+        modeButton = addRenderableWidget(Button.builder(modeLabel(), b -> {
+            paintingMode = !paintingMode;
+            b.setMessage(modeLabel());
+            rebuildTexture();
+            updateButtons();
+        }).bounds(x, top + 3, w, 16).build());
+
         nameBox = new EditBox(font, x, top + 22, w, 16, Component.translatable("screen.custombeds.name"));
         nameBox.setMaxLength(Packets.MAX_NAME);
         nameBox.setHint(Component.translatable("screen.custombeds.name_hint").withStyle(ChatFormatting.DARK_GRAY));
@@ -102,6 +118,18 @@ public class BedStudioScreen extends Screen {
         browseButton = addRenderableWidget(Button.builder(Component.translatable("screen.custombeds.browse"),
                 b -> browse()).bounds(x + 134, top + 43, 46, 18).build());
 
+        int sx = x + 56;
+        widthButton = addRenderableWidget(Button.builder(sizeLabel(true), b -> {
+            paintW = paintW % 4 + 1;
+            b.setMessage(sizeLabel(true));
+            rebuildTexture();
+        }).bounds(sx, top + 66, w - 56, 16).build());
+        heightButton = addRenderableWidget(Button.builder(sizeLabel(false), b -> {
+            paintH = paintH % 4 + 1;
+            b.setMessage(sizeLabel(false));
+            rebuildTexture();
+        }).bounds(sx, top + 85, w - 56, 16).build());
+
         createButton = addRenderableWidget(Button.builder(Component.translatable("screen.custombeds.create"),
                 b -> create()).bounds(x, top + 152, w, 20).build());
 
@@ -116,7 +144,34 @@ public class BedStudioScreen extends Screen {
         updateButtons();
     }
 
+    private Component modeLabel() {
+        return Component.translatable(paintingMode ? "screen.custombeds.mode_painting" : "screen.custombeds.mode_bed");
+    }
+
+    private Component sizeLabel(boolean width) {
+        return Component.translatable(width ? "screen.custombeds.width" : "screen.custombeds.height", width ? paintW : paintH);
+    }
+
+    /** Re-makes the texture from the picked picture for the current mode/size. */
+    private void rebuildTexture() {
+        if (sourceImage == null) return;
+        try {
+            BufferedImage tex = paintingMode
+                    ? BedImageMaker.composePainting(sourceImage, paintW, paintH)
+                    : BedImageMaker.compose(sourceImage);
+            pendingPng = BedImageMaker.toPng(tex);
+            makePreview(pendingPng);
+        } catch (IOException e) {
+            pendingPng = null;
+            releasePreview();
+        }
+        if (createButton != null) updateButtons();
+    }
+
     private void updateButtons() {
+        widthButton.visible = paintingMode;
+        heightButton.visible = paintingMode;
+        createButton.setMessage(Component.translatable(paintingMode ? "screen.custombeds.create_painting" : "screen.custombeds.create"));
         createButton.active = pendingPng != null && !busy;
         loadButton.active = !busy;
         browseButton.active = !busy && !FilePicker.isOpen();
@@ -177,18 +232,25 @@ public class BedStudioScreen extends Screen {
             try {
                 BufferedImage src = ImageIO.read(path.toFile());
                 if (src == null) throw new IOException("unsupported format");
-                return BedImageMaker.toPng(BedImageMaker.compose(src));
+                return BedImageMaker.shrink(src, 768);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }, Util.backgroundExecutor()).whenComplete((png, err) -> Minecraft.getInstance().execute(() -> {
+        }, Util.backgroundExecutor()).whenComplete((img, err) -> Minecraft.getInstance().execute(() -> {
             busy = false;
-            if (err != null || png == null) {
+            if (err != null || img == null) {
                 CustomBeds.LOGGER.warn("Couldn't read bed image {}", path, err);
                 setStatus(Component.translatable("screen.custombeds.status.bad_image"), 0xFF5555);
             } else {
-                pendingPng = png;
-                makePreview(png);
+                sourceImage = img;
+                int[] size = BedImageMaker.suggestPaintingSize(img);
+                paintW = size[0];
+                paintH = size[1];
+                if (widthButton != null) {
+                    widthButton.setMessage(sizeLabel(true));
+                    heightButton.setMessage(sizeLabel(false));
+                }
+                rebuildTexture();
                 if (nameBox != null && nameBox.getValue().isBlank()) {
                     String file = path.getFileName().toString();
                     int dot = file.lastIndexOf('.');
@@ -225,7 +287,7 @@ public class BedStudioScreen extends Screen {
         if (name.isEmpty()) name = "Custom";
         busy = true;
         setStatus(Component.translatable("screen.custombeds.status.uploading"), 0xFFFF55);
-        ClientPacketHandler.upload(name, pendingPng);
+        ClientPacketHandler.upload(name, paintingMode ? 1 : 0, paintW, paintH, pendingPng);
         updateButtons();
     }
 
@@ -239,6 +301,7 @@ public class BedStudioScreen extends Screen {
         setStatus(message, ok ? 0x55FF55 : 0xFF5555);
         if (ok) {
             pendingPng = null;
+            sourceImage = null;
             releasePreview();
             nameBox.setValue("");
             pathBox.setValue("");
@@ -339,13 +402,18 @@ public class BedStudioScreen extends Screen {
         g.fill(rx, top, rx + PANEL_W, top + PANEL_H, 0xD0141418);
         g.renderOutline(rx, top, PANEL_W, PANEL_H, 0xFF5A5A70);
 
-        g.drawString(font, Component.translatable("screen.custombeds.new_bed"), left + 8, top + 8, 0xFFD45E);
         g.drawString(font, Component.translatable("screen.custombeds.library"), rx + 8, top + 8, 0xFFD45E);
 
         // preview of the blanket
         int px = left + 8, py = top + 66;
         g.fill(px - 1, py - 1, px + 49, py + 79, 0xFF3A3A48);
-        if (previewTexture != null) {
+        if (previewTexture != null && paintingMode) {
+            g.fill(px, py, px + 48, py + 78, 0xFF22222C);
+            int tw2 = paintW * BedImageMaker.PAINTING_PX_PER_BLOCK, th2 = paintH * BedImageMaker.PAINTING_PX_PER_BLOCK;
+            float s = Math.min(48f / tw2, 78f / th2);
+            int dw = Math.max(1, Math.round(tw2 * s)), dh = Math.max(1, Math.round(th2 * s));
+            g.blit(PREVIEW_ID, px + (48 - dw) / 2, py + (78 - dh) / 2, dw, dh, 0, 0, tw2, th2, tw2, th2);
+        } else if (previewTexture != null) {
             g.blit(PREVIEW_ID, px, py, 48, 78, 0, 0, 64, BedImageMaker.IMG_H, 64, BedImageMaker.H);
         } else {
             g.fill(px, py, px + 48, py + 78, 0xFF22222C);
@@ -353,8 +421,8 @@ public class BedStudioScreen extends Screen {
         }
 
         // tips next to the preview
-        int tx = px + 56, ty = py, tw = PANEL_W - 16 - 56;
-        for (FormattedCharSequence line : font.split(Component.translatable("screen.custombeds.tips"), tw)) {
+        int tx = px + 56, ty = paintingMode ? py + 40 : py, tw = PANEL_W - 16 - 56;
+        for (FormattedCharSequence line : font.split(Component.translatable(paintingMode ? "screen.custombeds.tips_painting" : "screen.custombeds.tips"), tw)) {
             g.drawString(font, line, tx, ty, 0x9A9AAA);
             ty += 10;
         }
@@ -394,10 +462,21 @@ public class BedStudioScreen extends Screen {
             if (i == selected) g.fill(lx, y, lx + lw, y + ROW_H, 0x60FFFFFF);
             else if (hovered) g.fill(lx, y, lx + lw, y + ROW_H, 0x25FFFFFF);
 
-            ResourceLocation tex = ClientBedTextures.texture(e.id());
-            g.blit(tex, lx + 4, y + 3, 15, 24, 0, 0, 64, BedImageMaker.IMG_H, 64, BedImageMaker.H);
+            if (e.isPainting()) {
+                ResourceLocation tex = ClientBedTextures.texture(e.id(), true);
+                int pw = Math.max(1, e.w()), ph = Math.max(1, e.h());
+                float sc = Math.min(18f / pw, 24f / ph);
+                int dw = Math.max(1, Math.round(pw * sc)), dh = Math.max(1, Math.round(ph * sc));
+                g.blit(tex, lx + 2 + (18 - dw) / 2, y + 3 + (24 - dh) / 2, dw, dh, 0, 0, 1, 1, 1, 1);
+            } else {
+                ResourceLocation tex = ClientBedTextures.texture(e.id());
+                g.blit(tex, lx + 4, y + 3, 15, 24, 0, 0, 64, BedImageMaker.IMG_H, 64, BedImageMaker.H);
+            }
 
-            g.drawString(font, font.plainSubstrByWidth(e.name(), lw - 30), lx + 24, y + 6, 0xFFFFFF);
+            Component title = e.isPainting()
+                    ? Component.translatable("screen.custombeds.entry_painting", e.name(), e.w(), e.h())
+                    : Component.translatable("screen.custombeds.entry_bed", e.name());
+            g.drawString(font, font.plainSubstrByWidth(title.getString(), lw - 30), lx + 24, y + 6, 0xFFFFFF);
             Component by = isMine(e)
                     ? Component.translatable("screen.custombeds.by_you")
                     : Component.translatable("screen.custombeds.by", e.ownerName());

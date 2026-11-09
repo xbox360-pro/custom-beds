@@ -15,6 +15,13 @@ public final class ClientHooks {
         return itemRenderer;
     }
 
+    private static CustomPaintingItemRenderer paintingRenderer;
+
+    public static BlockEntityWithoutLevelRenderer paintingItemRenderer() {
+        if (paintingRenderer == null) paintingRenderer = new CustomPaintingItemRenderer();
+        return paintingRenderer;
+    }
+
     public static void openGiftScreen() {
         Minecraft.getInstance().setScreen(new GiftWrapScreen(null));
     }

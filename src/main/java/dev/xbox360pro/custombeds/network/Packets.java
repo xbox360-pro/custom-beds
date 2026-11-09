@@ -25,16 +25,20 @@ public final class Packets {
 
     // ---------------------------------------------------------------- client -> server
 
-    public record UploadChunk(String name, int index, int total, byte[] data) {
+    /** kind: 0 = bed, 1 = painting (w/h in blocks, ignored for beds). */
+    public record UploadChunk(String name, int kind, int w, int h, int index, int total, byte[] data) {
         public static void encode(UploadChunk m, FriendlyByteBuf buf) {
             buf.writeUtf(m.name, MAX_NAME * 2);
+            buf.writeByte(m.kind);
+            buf.writeByte(m.w);
+            buf.writeByte(m.h);
             buf.writeVarInt(m.index);
             buf.writeVarInt(m.total);
             buf.writeByteArray(m.data);
         }
 
         public static UploadChunk decode(FriendlyByteBuf buf) {
-            return new UploadChunk(buf.readUtf(MAX_NAME * 2), buf.readVarInt(), buf.readVarInt(), buf.readByteArray(CHUNK_SIZE));
+            return new UploadChunk(buf.readUtf(MAX_NAME * 2), buf.readByte(), buf.readByte(), buf.readByte(), buf.readVarInt(), buf.readVarInt(), buf.readByteArray(CHUNK_SIZE));
         }
 
         public static void handle(UploadChunk m, Supplier<NetworkEvent.Context> ctx) {
@@ -129,7 +133,11 @@ public final class Packets {
         }
     }
 
-    public record DesignEntry(UUID id, String name, String ownerName, UUID ownerId) {}
+    public record DesignEntry(UUID id, String name, String ownerName, UUID ownerId, int kind, int w, int h) {
+        public boolean isPainting() {
+            return kind == 1;
+        }
+    }
 
     public record DesignList(List<DesignEntry> entries, boolean canCopyAll) {
         public static void encode(DesignList m, FriendlyByteBuf buf) {
@@ -139,6 +147,9 @@ public final class Packets {
                 buf.writeUtf(e.name(), 256);
                 buf.writeUtf(e.ownerName(), 256);
                 buf.writeUUID(e.ownerId());
+                buf.writeByte(e.kind());
+                buf.writeByte(e.w());
+                buf.writeByte(e.h());
             }
             buf.writeBoolean(m.canCopyAll);
         }
@@ -147,7 +158,8 @@ public final class Packets {
             int n = buf.readVarInt();
             List<DesignEntry> entries = new ArrayList<>(Math.min(n, 4096));
             for (int i = 0; i < n; i++) {
-                entries.add(new DesignEntry(buf.readUUID(), buf.readUtf(256), buf.readUtf(256), buf.readUUID()));
+                entries.add(new DesignEntry(buf.readUUID(), buf.readUtf(256), buf.readUtf(256), buf.readUUID(),
+                        buf.readByte(), buf.readByte(), buf.readByte()));
             }
             return new DesignList(entries, buf.readBoolean());
         }

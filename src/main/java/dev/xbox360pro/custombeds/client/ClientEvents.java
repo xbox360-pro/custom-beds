@@ -36,6 +36,7 @@ public final class ClientEvents {
         @SubscribeEvent
         public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
             event.registerBlockEntityRenderer(ModRegistry.CUSTOM_BED_BE.get(), CustomBedRenderer::new);
+            event.registerEntityRenderer(ModRegistry.CUSTOM_PAINTING.get(), CustomPaintingRenderer::new);
         }
     }
 

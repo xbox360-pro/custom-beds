@@ -3,6 +3,7 @@ package dev.xbox360pro.custombeds.client.screen;
 import com.mojang.authlib.GameProfile;
 import dev.xbox360pro.custombeds.ModRegistry;
 import dev.xbox360pro.custombeds.item.CustomBedItem;
+import dev.xbox360pro.custombeds.item.CustomPaintingItem;
 import dev.xbox360pro.custombeds.network.Network;
 import dev.xbox360pro.custombeds.network.Packets;
 import net.minecraft.ChatFormatting;
@@ -79,7 +80,8 @@ public class GiftWrapScreen extends Screen {
         if (minecraft == null || minecraft.player == null) return;
         Inventory inv = minecraft.player.getInventory();
         for (int i = 0; i < inv.getContainerSize() && bedSlots.size() < MAX_BEDS; i++) {
-            if (inv.getItem(i).getItem() instanceof CustomBedItem) bedSlots.add(i);
+            if (inv.getItem(i).getItem() instanceof CustomBedItem
+                    || inv.getItem(i).getItem() instanceof CustomPaintingItem) bedSlots.add(i);
         }
         if (selBed >= bedSlots.size()) selBed = -1;
         if (selBed < 0 && !bedSlots.isEmpty()) selBed = 0;

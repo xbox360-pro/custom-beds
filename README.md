@@ -1,6 +1,6 @@
-# Custom Beds (Forge 1.20.1)
+# Custom Beds & Paintings (Forge 1.20.1)
 
-Turn any picture into a brand-new bed, in game, with no restart.
+Turn any picture into a brand-new bed or painting, in game, with no restart.
 
 ## How to use
 - **Press `B`** to open the **Bed Studio** (rebind in Controls > Custom Beds).
@@ -12,9 +12,14 @@ Turn any picture into a brand-new bed, in game, with no restart.
   (creative players and ops can copy any bed).
 - Custom beds work like normal beds: you can sleep in them, set your spawn, and they explode in the Nether.
 
+## Paintings
+- Click the **Making: Bed** button at the top of the studio to switch to **Painting**.
+- The size (1-4 blocks wide/tall) is picked from your picture's shape; click **Width** / **Height** to change it.
+- Hit **Create Painting!** and hang it on any wall with enough room. Break it to get it back.
+
 ## Gifts
 - Craft **Gift Wrap**: 3 Paper + 1 String + any Dye = 3 Gift Wrap (free in creative).
-- Right-click Gift Wrap (or click **Gift Wrap...** in the studio). Pick a bed, pick a friend, add a note.
+- Right-click Gift Wrap (or click **Gift Wrap...** in the studio). Pick a bed or painting, pick a friend, add a note.
   - **Wrap It** puts the present in your inventory so you can hand it over yourself.
   - **Wrap & Send** delivers it straight to your friend.
 - Right-click a **Wrapped Gift** to unwrap it. A gift addressed to someone can only be opened by them (or the sender).

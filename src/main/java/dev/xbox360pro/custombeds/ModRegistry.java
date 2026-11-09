@@ -2,11 +2,15 @@ package dev.xbox360pro.custombeds;
 
 import dev.xbox360pro.custombeds.block.CustomBedBlock;
 import dev.xbox360pro.custombeds.block.CustomBedBlockEntity;
+import dev.xbox360pro.custombeds.entity.CustomPaintingEntity;
 import dev.xbox360pro.custombeds.item.CustomBedItem;
+import dev.xbox360pro.custombeds.item.CustomPaintingItem;
 import dev.xbox360pro.custombeds.item.GiftWrapItem;
 import dev.xbox360pro.custombeds.item.WrappedGiftItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -29,6 +33,8 @@ public final class ModRegistry {
             DeferredRegister.create(ForgeRegistries.ITEMS, CustomBeds.MODID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
             DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, CustomBeds.MODID);
+    public static final DeferredRegister<EntityType<?>> ENTITIES =
+            DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, CustomBeds.MODID);
     public static final DeferredRegister<CreativeModeTab> TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, CustomBeds.MODID);
 
@@ -41,6 +47,16 @@ public final class ModRegistry {
 
     public static final RegistryObject<CustomBedItem> CUSTOM_BED_ITEM = ITEMS.register("custom_bed",
             () -> new CustomBedItem(CUSTOM_BED.get(), new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<EntityType<CustomPaintingEntity>> CUSTOM_PAINTING = ENTITIES.register("custom_painting",
+            () -> EntityType.Builder.<CustomPaintingEntity>of(CustomPaintingEntity::new, MobCategory.MISC)
+                    .sized(0.5f, 0.5f)
+                    .clientTrackingRange(10)
+                    .updateInterval(Integer.MAX_VALUE)
+                    .build("custom_painting"));
+
+    public static final RegistryObject<CustomPaintingItem> CUSTOM_PAINTING_ITEM = ITEMS.register("custom_painting",
+            () -> new CustomPaintingItem(new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<GiftWrapItem> GIFT_WRAP = ITEMS.register("gift_wrap",
             () -> new GiftWrapItem(new Item.Properties()));
@@ -59,6 +75,7 @@ public final class ModRegistry {
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
+        ENTITIES.register(modBus);
         TABS.register(modBus);
     }
 }

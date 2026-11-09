@@ -29,16 +29,21 @@ public final class ClientBedTextures {
 
     private static final Map<UUID, Entry> CACHE = new HashMap<>();
     private static ResourceLocation fallback;
+    private static ResourceLocation paintingFallback;
 
     public static ResourceLocation texture(@Nullable UUID id) {
-        if (id == null) return fallback();
+        return texture(id, false);
+    }
+
+    public static ResourceLocation texture(@Nullable UUID id, boolean painting) {
+        if (id == null) return painting ? paintingFallback() : fallback();
         Entry e = CACHE.computeIfAbsent(id, k -> new Entry());
         if (e.texture != null) return e.texture;
         if (!e.requested && !e.missing && Minecraft.getInstance().getConnection() != null) {
             e.requested = true;
             Network.sendToServer(new Packets.RequestImage(id));
         }
-        return fallback();
+        return painting ? paintingFallback() : fallback();
     }
 
     public static void accept(UUID id, byte[] png) {
@@ -72,6 +77,20 @@ public final class ClientBedTextures {
             }
         }
         return fallback;
+    }
+
+    public static ResourceLocation paintingFallback() {
+        if (paintingFallback == null) {
+            try {
+                byte[] png = BedImageMaker.toPng(BedImageMaker.paintingPlaceholder());
+                NativeImage image = NativeImage.read(new ByteArrayInputStream(png));
+                paintingFallback = new ResourceLocation(CustomBeds.MODID, "dynamic/painting_placeholder");
+                Minecraft.getInstance().getTextureManager().register(paintingFallback, new DynamicTexture(image));
+            } catch (Exception ex) {
+                paintingFallback = new ResourceLocation("minecraft", "textures/painting/back.png");
+            }
+        }
+        return paintingFallback;
     }
 
     /** Forget everything when leaving a world/server (designs are per-world). */
