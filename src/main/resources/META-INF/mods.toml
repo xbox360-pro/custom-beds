@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="custombeds"
+version="1.0.0"
+displayName="Custom Beds"
+authors="Leon (xbox360-pro)"
+description='''
+Turn any image into a brand-new bed, right in game - no restart needed.
+Press B to open the Bed Studio. Wrap beds as gifts and send them to friends.
+'''
+
+[[dependencies.custombeds]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.custombeds]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
